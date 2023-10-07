@@ -128,7 +128,7 @@ auto BlockIterator::create(BlockManager *bm, block_id_t start_block_id,
 
   std::vector<u8> buffer(bm->block_sz);
 
-  auto res = bm->read_block(iter.cur_block_off % bm->block_sz + start_block_id,
+  auto res = bm->read_block(iter.cur_block_off / bm->block_sz + start_block_id,
                             buffer.data());
   if (res.is_ok()) {
     iter.buffer = std::move(buffer);
