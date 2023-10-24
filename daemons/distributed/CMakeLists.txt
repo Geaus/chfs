@@ -1,0 +1,10 @@
+set(SFS_SOURCES main.cc)
+set(SFS_META meta.cc)
+set(SFS_DATA data.cc)
+add_executable(fs_client ${SFS_SOURCES})
+add_executable(meta ${SFS_META})
+add_executable(data ${SFS_DATA})
+
+target_link_libraries(fs_client chfs fuse)
+target_link_libraries(meta chfs)
+target_link_libraries(data chfs)

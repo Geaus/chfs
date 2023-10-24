@@ -1,0 +1,38 @@
+version: '3'
+
+services:
+  fs_client:
+    build:
+      context: ../.. # Set current context to the root path.
+      dockerfile: scripts/lab2/fs_client/Dockerfile
+    privileged: true
+    depends_on:
+      - meta
+    network_mode: "host"
+    volumes:
+      - ../..:/home/stu/chfs
+      - ../../build/bin/fs_client:/home/stu/fs_client
+
+  meta:
+    build:
+      context: ../.. # Set current context to the root path.
+      dockerfile: scripts/lab2/meta/Dockerfile
+    depends_on:
+      - data
+    ports:
+      - 8080:8080
+    network_mode: "host"
+    volumes:
+      - ../../build/bin/meta:/home/bin/meta
+
+  data:
+    build:
+      context: ../.. # Set current context to the root path.
+      dockerfile: scripts/lab2/data/Dockerfile
+    ports:
+      - 8081:8081
+      - 8082:8082
+      - 8083:8083
+    network_mode: "host"
+    volumes:
+      - ../../build/bin/data:/home/bin/data

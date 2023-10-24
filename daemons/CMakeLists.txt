@@ -1,1 +1,2 @@
 add_subdirectory(single_node_fs)
+add_subdirectory(distributed)

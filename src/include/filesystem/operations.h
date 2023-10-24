@@ -20,6 +20,7 @@ namespace chfs {
  * Implement the basic inode filesystem
  */
 class FileOperation {
+  friend class MetadataServer;
 protected:
   // Feel free to remove them if you don't want to implement the inode-based
   // filesystem

@@ -100,6 +100,7 @@ set(CHFS_THIRD_PARTY_INCLUDE_DIR
 #        ${PROJECT_SOURCE_DIR}/third_party/libpg_query/include
         ${PROJECT_SOURCE_DIR}/third_party/argparse/include
 #        ${PROJECT_SOURCE_DIR}/third_party/cpp_random_distributions
+        ${PROJECT_SOURCE_DIR}/third_party/rpclib/include
 )
 
 include_directories(${CHFS_SRC_INCLUDE_DIR} ${CHFS_TEST_INCLUDE_DIR} ${CHFS_THIRD_PARTY_INCLUDE_DIR})
@@ -169,10 +170,26 @@ set(LAB1A_FILES
         ${LAB1A_FILES}
 )
 
-add_custom_target(check-clang-tidy-lab1a
+set(LAB2A_FILES
+        "${PROJECT_SOURCE_DIR}/src/include/librpc/*.h"
+        "${PROJECT_SOURCE_DIR}/src/librpc/*.cc"
+        ${LAB1A_FILES}
+)
+
+set(LAB2B_FILES
+        "${PROJECT_SOURCE_DIR}/src/include/distributed/*.h"
+        "${PROJECT_SOURCE_DIR}/src/distributed/*.cc"
+        ${LAB2A_FILES}
+)
+
+add_custom_target(check-clang-tidy-lab2b
         ${CHFS_BUILD_SUPPORT_DIR}/run_clang_tidy.py # run LLVM's clang-tidy script
         -clang-tidy-binary ${CLANG_TIDY_BIN} # using our clang-tidy binary
         -p ${CMAKE_BINARY_DIR} # using cmake's generated compile commands
         -checks=-*,clang-diagnostic-*,-clang-diagnostic-unused-value,clang-analyzer-*,-*,bugprone-*,performance-*,readability-*,-readability-magic-numbers,-readability-braces-around-statements,-readability-inconsistent-declaration-parameter-name,-readability-named-parameter
-        ${LAB1A_FILES}
+        ${LAB2B_FILES}
 )
+
+add_custom_target(clean-fs
+        rm -rf /tmp/inode_* /tmp/data_block_* /tmp/meta_block* /tmp/test_* /tmp/chfs.log
+)     

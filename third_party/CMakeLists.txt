@@ -4,3 +4,4 @@ add_subdirectory(googletest)
 
 add_subdirectory(fmt)
 add_subdirectory(argparse)
+add_subdirectory(rpclib)

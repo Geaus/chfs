@@ -6,17 +6,20 @@ add_executable(allocator_stress_test
     EXCLUDE_FROM_ALL
     allocator.cc
 )
-add_dependencies(build-tests allocator_stress_test)
-add_dependencies(check-tests allocator_stress_test)
+
+add_executable(concurrent_stress_test
+    EXCLUDE_FROM_ALL
+    concurrent.cc
+)
 
 target_link_libraries(allocator_stress_test chfs gtest gmock_main) 
+target_link_libraries(concurrent_stress_test chfs gtest gmock_main)
 
 include(GoogleTest)
 gtest_discover_tests(allocator_stress_test)
+gtest_discover_tests(concurrent_stress_test)
 
-# Set test target properties and dependencies.
-set_target_properties(allocator_stress_test
-        PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/stress-test"
-        COMMAND allocator_stress_test
-        )
+add_custom_target(run_concurrent_stress_test
+    COMMAND concurrent_stress_test
+    DEPENDS concurrent_stress_test
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

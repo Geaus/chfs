@@ -37,6 +37,8 @@ protected:
   u8 *block_data;
   usize block_cnt;
   bool in_memory; // whether we use in-memory to emulate the block manager
+  bool maybe_failed;
+  usize write_fail_cnt;
 
 public:
   /**
@@ -63,6 +65,16 @@ public:
    * @param block_size the size of each block
    */
   BlockManager(usize block_count, usize block_size);
+
+  /**
+   * Creates a new block manager that writes to a file-backed block device.
+   * It reserves some blocks for recording logs.
+   * 
+   * @param block_file the file name of the  file to write to
+   * @param block_cnt the number of blocks in the device
+   * @param is_log_enabled whether to enable log
+   */
+  BlockManager(const std::string &file, usize block_cnt, bool is_log_enabled);
 
   virtual ~BlockManager();
 
@@ -113,6 +125,23 @@ public:
    * Get the block data pointer of the manager
    */
   auto unsafe_get_block_ptr() const -> u8 * { return this->block_data; }
+
+  /**
+   * flush the data of a block into disk
+   */
+  auto sync(block_id_t block_id) -> ChfsNullResult;
+
+  /**
+   * Flush the page cache
+   */
+  auto flush() -> ChfsNullResult;
+
+  /**
+   * Mark the block manager as may fail state
+   */
+  auto set_may_fail(bool may_fail) -> void {
+    this->maybe_failed = may_fail;
+  }
 };
 
 /**

@@ -16,6 +16,7 @@ add_custom_target(check-tests COMMAND ${CMAKE_CTEST_COMMAND} --verbose)
 
 # #########################################
 # "make XYZ_test"
+# "make run_XYZ_test"
 # #########################################
 foreach (chfs_test_source ${CHFS_TEST_SOURCES})
     # Create a human readable name.
@@ -44,6 +45,13 @@ foreach (chfs_test_source ${CHFS_TEST_SOURCES})
             PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test"
             COMMAND ${chfs_test_name}
+            )
+
+    # Add target for running a single test
+    add_custom_target(run_${chfs_test_name}
+            COMMAND ./${chfs_test_name}
+            DEPENDS ${chfs_test_name}
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test
             )
 endforeach ()
 

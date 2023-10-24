@@ -47,4 +47,8 @@ namespace chfs {
   DISALLOW_COPY(cname);                                                        \
   DISALLOW_MOVE(cname);
 
+// Macros for block computation
+#define ROUND_UP(x, n) (((x) + (n)-1) & ~((n)-1))
+#define ROUND_DOWN(x, n) ((x) & ~((n)-1))
+
 } // namespace chfs
