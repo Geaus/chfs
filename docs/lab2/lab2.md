@@ -17,6 +17,8 @@ The metadata server is a server that maintains all file system metadata. It stor
 
 The filesystem client implements the filesystem logic by issuing RPCs to the metadata server and the data server.
 
+**Notice:** refer to [CSE 2023 Lab 2](https://docs.qq.com/doc/DWlZya01LbWdzUFNs) first if you encounter any problems. The document contains some common problems and solutions in this lab.
+
 ### Get the Source Code
 
 - Pull the source code of lab2 from our GitLab:
@@ -63,7 +65,9 @@ Please also refer to [lab1.md](../lab1/lab1.md) for more details. It's the same 
 
 ## Demo
 
-After finishing lab2, you can use the filesystem implemented by yourself like lab1. Follow these steps:
+After finishing lab2, you can use the filesystem implemented by yourself like lab1. Since we use `docker compose` to set up the environment in this lab, you might need to install `docker compose` plugin first. You can refer to [Overview of installing Docker Compose](https://docs.docker.com/compose/install/) for more details.
+
+Follow these steps:
 
 - Under `chfs` directory, execute:
 
