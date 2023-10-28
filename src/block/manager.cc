@@ -92,11 +92,12 @@ auto BlockManager::write_block(block_id_t block_id, const u8 *data)
       return KNullOk;
     }
   }
-  
 
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+  memcpy(&(this->block_data[block_id*block_sz]),data,this->block_sz);
+//  UNIMPLEMENTED();
   this->write_fail_cnt++;
+
   return KNullOk;
 }
 
@@ -111,7 +112,8 @@ auto BlockManager::write_partial_block(block_id_t block_id, const u8 *data,
   }
 
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+  memcpy(&(this->block_data[block_id*block_sz+offset]),data,len);
+ //  UNIMPLEMENTED();
   this->write_fail_cnt++;
   return KNullOk;
 }
@@ -119,16 +121,24 @@ auto BlockManager::write_partial_block(block_id_t block_id, const u8 *data,
 auto BlockManager::read_block(block_id_t block_id, u8 *data) -> ChfsNullResult {
 
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+//    usize offset = block_id * block_sz;
+    memcpy(data,&(this->block_data[block_id*block_sz]),this->block_sz);
+//    std::memcpy(data, block_data + offset, block_sz);
 
+    //  UNIMPLEMENTED();
   return KNullOk;
 }
 
 auto BlockManager::zero_block(block_id_t block_id) -> ChfsNullResult {
   
   // TODO: Implement this function.
-  UNIMPLEMENTED();
-
+//    u8 * buffer =new u8[this->block_sz];
+//    for (usize i = 0; i < this->block_sz; i++) {
+//        buffer[i] =0;
+//    }
+    memset(&(this->block_data[block_id*block_sz]),0,this->block_sz);
+//    delete[] buffer;
+    //UNIMPLEMENTED();
   return KNullOk;
 }
 

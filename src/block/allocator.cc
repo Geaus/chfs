@@ -96,6 +96,7 @@ auto BlockAllocator::allocate() -> ChfsResult<block_id_t> {
 
   for (uint i = 0; i < this->bitmap_block_cnt; i++) {
     bm->read_block(i + this->bitmap_block_id, buffer.data());
+    auto bitmap = Bitmap(buffer.data(), this->bm->block_size());
 
     // The index of the allocated bit inside current bitmap block.
     std::optional<block_id_t> res = std::nullopt;
@@ -105,12 +106,16 @@ auto BlockAllocator::allocate() -> ChfsResult<block_id_t> {
 
       // TODO: Find the first free bit of current bitmap block
       // and store it in `res`.
-      UNIMPLEMENTED();
+      res=bitmap.find_first_free_w_bound(this->last_block_num);
+//      std::cerr<<res.value();
+      //UNIMPLEMENTED();
     } else {
 
       // TODO: Find the first free bit of current bitmap block
       // and store it in `res`.
-      UNIMPLEMENTED();
+      res=bitmap.find_first_free();
+//      std::cerr<<res.value();
+      //UNIMPLEMENTED();
     }
 
     // If we find one free bit inside current bitmap block.
@@ -122,7 +127,13 @@ auto BlockAllocator::allocate() -> ChfsResult<block_id_t> {
       // 1. Set the free bit we found to 1 in the bitmap.
       // 2. Flush the changed bitmap block back to the block manager.
       // 3. Calculate the value of `retval`.
-      UNIMPLEMENTED();
+
+      bitmap.set(res.value());
+      bm->write_block(i + this->bitmap_block_id, buffer.data());
+
+      const auto total_bits_per_block = this->bm->block_size() * KBitsPerByte;
+      retval=i*total_bits_per_block+res.value();
+      //UNIMPLEMENTED();
 
       return ChfsResult<block_id_t>(retval);
     }
@@ -141,7 +152,24 @@ auto BlockAllocator::deallocate(block_id_t block_id) -> ChfsNullResult {
   // 2. Flush the changed bitmap block back to the block manager.
   // 3. Return ChfsNullResult(ErrorType::INVALID_ARG) 
   //    if you find `block_id` is invalid (e.g. already freed).
-  UNIMPLEMENTED();
+  const auto total_bits_per_block = this->bm->block_size() * KBitsPerByte;
+  std::vector<u8> buffer(bm->block_size());
+
+  usize id = (block_id)/total_bits_per_block;
+  usize idx= (block_id)%total_bits_per_block;
+
+  bm->read_block(id + this->bitmap_block_id, buffer.data());
+  auto bitmap = Bitmap(buffer.data(), bm->block_size());
+
+  if(bitmap.check(idx)){
+      bitmap.clear(idx);
+      bm->write_block(id + this->bitmap_block_id, buffer.data());
+  }
+  else{
+      return ChfsNullResult(ErrorType::INVALID_ARG);
+  }
+
+  //UNIMPLEMENTED();
 
   return KNullOk;
 }
