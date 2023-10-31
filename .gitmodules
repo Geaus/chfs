@@ -16,4 +16,4 @@
 
 [submodule "third_party/rpclib"]
 	path = third_party/rpclib
-	url = https://github.com/Yangfisher1/rpclib.git
+	url = https://ghproxy.com/https://github.com/Yangfisher1/rpclib.git
