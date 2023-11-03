@@ -16,11 +16,11 @@ auto DataServer::initialize(std::string const &data_path) {
       new BlockManager(data_path, KDefaultBlockCnt));
   if (is_initialized) {
     block_allocator_ =
-        std::make_shared<BlockAllocator>(bm, false);
+        std::make_shared<BlockAllocator>(bm, 0, false);
   } else {
     // We need to reserve some blocks for storing the version of each block
     block_allocator_ = std::shared_ptr<BlockAllocator>(
-        new BlockAllocator(bm, true));
+        new BlockAllocator(bm, 0, true));
   }
 
   // Initialize the RPC server and bind all handlers

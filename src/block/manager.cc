@@ -89,7 +89,7 @@ auto BlockManager::write_block(block_id_t block_id, const u8 *data)
   if (this->maybe_failed && block_id < this->block_cnt) {
     if (this->write_fail_cnt >= 3) {
       this->write_fail_cnt = 0;
-      return KNullOk;
+      return ErrorType::INVALID;
     }
   }
 
@@ -107,7 +107,7 @@ auto BlockManager::write_partial_block(block_id_t block_id, const u8 *data,
   if (this->maybe_failed && block_id < this->block_cnt) {
     if (this->write_fail_cnt >= 3) {
       this->write_fail_cnt = 0;
-      return KNullOk;
+      return ErrorType::INVALID;
     }
   }
 

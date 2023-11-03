@@ -550,11 +550,21 @@ void chfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
   // lookup
   auto lookup_res = fs->lookup(parent, name);
   if (lookup_res.is_err()) {
+    auto err = lookup_res.unwrap_error();
+    if (err == ErrorType::NotExist) {
+      fuse_reply_err(req, ENOENT);
+      return;
+    }
     fuse_reply_err(req, -1);
     return;
   }
 
   auto lookup = lookup_res.unwrap();
+  if (lookup == 0) {
+    fuse_reply_err(req, ENOENT);
+    return;
+  }
+
   e.ino = lookup;
  
   auto attr_res = fs->get_type_attr(e.ino);
