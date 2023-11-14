@@ -17,7 +17,7 @@
 
 namespace chfs {
 
-const u32 KFailureRate = 10; // Network failure rate = 1/KFailureRate
+const u32 KFailureRate = 8; // Network failure rate = 1/KFailureRate
 
 using RpcResponse = RPCLIB_MSGPACK::object_handle;
 
@@ -73,10 +73,12 @@ public:
       -> ChfsResult<std::shared_ptr<RpcResponse>> {
     // Calculate whether the request is reliable or not
     bool valid =
-        reliable || (!reliable && (generator.rand(1, KFailureRate * 10)) < 10);
+        reliable ||
+        (!reliable && (generator.rand(1, KFailureRate * 10)) > 10);
 
     if (valid) {
       // Send, wait and return
+      rpc_count.fetch_add(1);
       auto res = client->call(name, args...);
 
       return ChfsResult<std::shared_ptr<RpcResponse>>(
@@ -114,9 +116,11 @@ public:
       -> ChfsResult<std::shared_ptr<std::future<RpcResponse>>> {
     // Also check whether the req is valid or not
     bool valid =
-        reliable || (!reliable && (generator.rand(1, KFailureRate * 10)) < 10);
+        reliable ||
+        (!reliable && (generator.rand(1, KFailureRate * 10)) > 10);
 
     if (valid) {
+      rpc_count.fetch_add(1);
       auto ft = client->async_call(name, args...);
       return ChfsResult<std::shared_ptr<std::future<RpcResponse>>>(
           std::make_shared<std::future<RpcResponse>>(std::move(ft)));
@@ -140,9 +144,20 @@ public:
    */
   auto get_connection_state() -> rpc::client::connection_state;
 
+  /**
+   * Get the rpc count
+   */
+  auto count() -> int;
+
+  /**
+   * Set client reliability
+   */
+  auto set_reliable(bool r) -> bool;
+  
 private:
   std::unique_ptr<rpc::client> client;
   bool reliable;
+  std::atomic_int rpc_count;
   RandomNumberGenerator generator;
 };
 } // namespace chfs

@@ -1,3 +1,3 @@
-# Lab 1: Basic Filesystem
+# Lab 3: Raft
 
-[Document](./docs/lab1/lab1.md)
+[Document](./docs/lab3/raft.md)
