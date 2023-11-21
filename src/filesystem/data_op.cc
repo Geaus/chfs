@@ -17,13 +17,23 @@ auto FileOperation::alloc_inode(InodeType type) -> ChfsResult<inode_id_t> {
 
 
   std::vector<u8> buffer(block_manager_->block_size());
+  auto bid_res = block_allocator_->allocate();
 
-  block_id_t bid = block_allocator_->allocate().unwrap();
-  inode_res = inode_manager_->allocate_inode(type,bid);
+  if(bid_res.is_ok()){
 
-  auto newNode = Inode(type,block_manager_->block_size());
-  newNode.flush_to_buffer(buffer.data());
-  block_manager_->write_block(bid,buffer.data());
+      block_id_t bid = bid_res.unwrap();
+      inode_res = inode_manager_->allocate_inode(type,bid);
+
+      auto newNode = Inode(type,block_manager_->block_size());
+      newNode.flush_to_buffer(buffer.data());
+
+//      auto res = block_manager_->write_block(bid,buffer.data());
+//      if(res.unwrap_error() == ErrorType::INVALID){
+//          return static_cast<inode_id_t>(0);
+//      }
+      block_manager_->write_block(bid,buffer.data());
+
+  }
 
 
 //  UNIMPLEMENTED();

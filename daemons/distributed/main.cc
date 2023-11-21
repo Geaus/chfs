@@ -39,6 +39,9 @@ auto getattr_helper(InodeType type, const FileAttr &attr) -> struct stat {
     st.st_mode = S_IFDIR | 0777;
     st.st_nlink += 1;
     break;
+  case InodeType::Regular:
+    st.st_mode = S_IFREG | 0666;
+    break;
   default:
     // links
     UNIMPLEMENTED();

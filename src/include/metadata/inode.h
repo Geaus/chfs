@@ -31,6 +31,7 @@ enum class InodeType : u32 {
   Unknown = 0,
   FILE = 1,
   Directory = 2,
+  Regular = 3,
 };
 
 class Inode;
@@ -78,7 +79,7 @@ class Inode {
   friend class InodeIterator;
   friend class InodeManager;
   friend class FileOperation;
-
+public:
   InodeType type;
   FileAttr inner_attr;
   u32 block_size;
@@ -86,10 +87,12 @@ class Inode {
   // we stored the number of blocks in the inode to prevent
   // re-calculation during runtime
   u32 nblocks;
+  u32 ntuples;
   // The actual number of blocks should be larger,
   // which is dynamically calculated based on the block size
-public:
-  [[maybe_unused]] block_id_t blocks[0];
+
+    [[maybe_unused]] std::tuple<block_id_t, mac_id_t, version_t> block_infos[0];
+    [[maybe_unused]] block_id_t blocks[0];
 
 public:
   /**
@@ -101,6 +104,7 @@ public:
       : type(type), inner_attr(), block_size(block_size) {
     CHFS_VERIFY(block_size > sizeof(Inode), "Block size too small");
     nblocks = (block_size - sizeof(Inode)) / sizeof(block_id_t);
+    ntuples  = (block_size - sizeof(Inode)) / sizeof (std::tuple<block_id_t, mac_id_t, version_t>);
     inner_attr.set_all_time(time(0));
   }
 
@@ -123,6 +127,7 @@ public:
    * Get the number of blocks of the inode
    */
   auto get_nblocks() const -> u32 { return nblocks; }
+  auto get_ntuples() const -> u32 { return ntuples; }
 
   /**
    * Get the number of direct blocks stored in this inode
@@ -158,9 +163,20 @@ public:
   auto flush_to_buffer(u8 *buffer) const {
     memcpy(buffer, this, sizeof(Inode));
     auto inode_p = reinterpret_cast<Inode *>(buffer);
-    for (uint i = 0; i < this->nblocks; ++i) {
-      inode_p->blocks[i] = KInvalidBlockID;
+    if(type==InodeType::Regular){
+
+        for(uint i = 0; i < ntuples; i++){
+            std::get<0>(inode_p->block_infos[i]) = 0;
+            std::get<1>(inode_p->block_infos[i]) = 0;
+            std::get<2>(inode_p->block_infos[i]) = 0;
+        }
     }
+    else{
+        for (uint i = 0; i < this->nblocks; ++i) {
+            inode_p->blocks[i] = KInvalidBlockID;
+        }
+    }
+
   }
 
   /**
@@ -229,7 +245,7 @@ public:
 } __attribute__((packed));
 
 static_assert(sizeof(Inode) == sizeof(FileAttr) + sizeof(InodeType) +
-                                   sizeof(u32) + sizeof(u32),
+                                   sizeof(u32) + sizeof(u32)+ sizeof(u32),
               "Unexpected Inode size");
 
 /**

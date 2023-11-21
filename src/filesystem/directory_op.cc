@@ -153,25 +153,26 @@ auto FileOperation::mk_helper(inode_id_t id, const char *name, InodeType type)
       return ChfsResult<inode_id_t>(ErrorType::AlreadyExist);
   }
 
-  auto new_node_id = alloc_inode(type).unwrap();
-//  std::cerr<<"node"<<new_node_id<<" ";
+  auto new_node_id_res = alloc_inode(type);
 
-  read_directory(this,id,list);
-  std::string content = dir_list_to_string(list);
-  content=append_to_directory(content,name,new_node_id);
+  if(new_node_id_res.is_ok()){
 
-//  std::vector <u8> vec(content.size());
-//  std::cerr<<content.size();
-//  for(int i=0;i < content.size();i++){
-//      vec[i]=content[i];
-//  }
-//  vec.assign(content.begin(),content.end());
-  std::vector<u8> vec(content.begin(), content.end());
+      auto new_node_id = new_node_id_res.unwrap();
 
-  this->write_file(id,vec);
+      read_directory(this,id,list);
+      std::string content = dir_list_to_string(list);
+      content=append_to_directory(content,name,new_node_id);
+
+      std::vector<u8> vec(content.begin(), content.end());
+
+      this->write_file(id,vec);
 //  UNIMPLEMENTED();
 
-  return ChfsResult<inode_id_t>(new_node_id);
+      return ChfsResult<inode_id_t>(new_node_id);
+  }
+
+  return ChfsResult<inode_id_t>(0);
+
 }
 
 // {Your code here}
@@ -185,8 +186,30 @@ auto FileOperation::unlink(inode_id_t parent, const char *name)
   std::string content;
   std::list<DirectoryEntry> list;
   auto res = lookup(parent,name);
-  if(res.is_ok()){
-      remove_file(res.unwrap());
+
+  if(res.is_err()){
+      return ChfsNullResult (ErrorType::NotExist);
+  }
+  else{
+
+      inode_id_t id = res.unwrap();
+      std::vector<u8> buffer(this->block_manager_->block_size());
+      auto block_id_res = this->inode_manager_->get(id);
+      if(block_id_res.is_ok()){
+
+          block_id_t block_id = block_id_res.unwrap();
+          this->block_manager_->read_block(block_id,buffer.data());
+          Inode *inode_p = reinterpret_cast<Inode *>(buffer.data());
+
+          if(inode_p->get_type() == InodeType::Regular){
+              this->inode_manager_->free_inode(id);
+              this->block_allocator_->deallocate(block_id);
+          }
+          else{
+              remove_file(id);
+          }
+      }
+
   }
 
   read_directory(this,parent,list);

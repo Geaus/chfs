@@ -12,6 +12,7 @@
 #pragma once
 
 #include "common/config.h"
+#include "common/bitmap.h"
 #include "common/util.h"
 #include "librpc/client.h"
 #include "librpc/server.h"
@@ -241,6 +242,8 @@ private:
   bool is_log_enabled_;
   bool may_failed_;
   [[maybe_unused]] bool is_checkpoint_enabled_;
+
+  std::mutex global_lock;
 
   /**
    * {You can add anything you want here}
