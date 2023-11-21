@@ -70,6 +70,8 @@ public:
                  bool will_initialize = true);
 
   auto total_bitmap_block() -> usize { return this->bitmap_block_cnt; }
+  auto get_bitmap_id() -> usize { return this->bitmap_block_id; }
+  auto get_last_num() -> usize { return this->last_block_num; }
 
   /**
    * Count the number of free blocks.

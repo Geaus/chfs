@@ -3,7 +3,7 @@
 PARENT_DIR="$(dirname "$(realpath "$0")")"
 source $PARENT_DIR/set-env.sh
 
-CHFSDIR1=$ROOT_PATH/mnt
+CHFSDIR1=/tmp/mnt
 
 export PATH=$PATH:/usr/local/bin
 UMOUNT="umount"

@@ -81,37 +81,64 @@ BlockManager::BlockManager(const std::string &file, usize block_cnt, bool is_log
   this->write_fail_cnt = 0;
   this->maybe_failed = false;
   // TODO: Implement this function.
-  UNIMPLEMENTED();    
+
+    this->fd = open(file.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    CHFS_ASSERT(this->fd != -1, "Failed to open the block manager file");
+
+    auto file_sz = get_file_sz(this->file_name_);
+    if (file_sz == 0) {
+        initialize_file(this->fd, this->total_storage_sz());
+    } else {
+        if(is_log_enabled){
+            this->block_cnt = (file_sz / this->block_sz);
+        }
+        else{
+            this->block_cnt = file_sz / this->block_sz;
+            CHFS_ASSERT(this->total_storage_sz() == KDefaultBlockCnt * this->block_sz,
+                        "The file size mismatches");
+        }
+
+    }
+
+    this->block_data =
+            static_cast<u8 *>(mmap(nullptr, this->total_storage_sz(),
+                                   PROT_READ | PROT_WRITE, MAP_SHARED, this->fd, 0));
+    CHFS_ASSERT(this->block_data != MAP_FAILED, "Failed to mmap the data");
+
+
+
+//  UNIMPLEMENTED();
 }
 
 auto BlockManager::write_block(block_id_t block_id, const u8 *data)
     -> ChfsNullResult {
-  if (this->maybe_failed && block_id < this->block_cnt) {
+  if (this->maybe_failed && block_id <  (this->block_cnt - 1024)) {
     if (this->write_fail_cnt >= 3) {
       this->write_fail_cnt = 0;
-      return ErrorType::INVALID;
+      return ChfsNullResult(ErrorType::INVALID);;
     }
   }
-  
-
+//  std::cout<<this->write_fail_cnt<<std::endl;
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+  memcpy(&(this->block_data[block_id*block_sz]),data,this->block_sz);
+//  UNIMPLEMENTED();
   this->write_fail_cnt++;
+
   return KNullOk;
 }
 
 auto BlockManager::write_partial_block(block_id_t block_id, const u8 *data,
                                        usize offset, usize len)
     -> ChfsNullResult {
-  if (this->maybe_failed && block_id < this->block_cnt) {
+  if (this->maybe_failed && block_id < (this->block_cnt - 1024)) {
     if (this->write_fail_cnt >= 3) {
       this->write_fail_cnt = 0;
-      return ErrorType::INVALID;
+      return ChfsNullResult(ErrorType::INVALID);;
     }
   }
-
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+  memcpy(&(this->block_data[block_id*block_sz+offset]),data,len);
+ //  UNIMPLEMENTED();
   this->write_fail_cnt++;
   return KNullOk;
 }
@@ -119,16 +146,24 @@ auto BlockManager::write_partial_block(block_id_t block_id, const u8 *data,
 auto BlockManager::read_block(block_id_t block_id, u8 *data) -> ChfsNullResult {
 
   // TODO: Implement this function.
-  UNIMPLEMENTED();
+//    usize offset = block_id * block_sz;
+    memcpy(data,&(this->block_data[block_id*block_sz]),this->block_sz);
+//    std::memcpy(data, block_data + offset, block_sz);
 
+    //  UNIMPLEMENTED();
   return KNullOk;
 }
 
 auto BlockManager::zero_block(block_id_t block_id) -> ChfsNullResult {
   
   // TODO: Implement this function.
-  UNIMPLEMENTED();
-
+//    u8 * buffer =new u8[this->block_sz];
+//    for (usize i = 0; i < this->block_sz; i++) {
+//        buffer[i] =0;
+//    }
+    memset(&(this->block_data[block_id*block_sz]),0,this->block_sz);
+//    delete[] buffer;
+    //UNIMPLEMENTED();
   return KNullOk;
 }
 

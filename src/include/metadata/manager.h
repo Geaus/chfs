@@ -111,6 +111,12 @@ public:
   auto get_reserved_blocks() const -> usize {
     return 1 + n_table_blocks + n_bitmap_blocks;
   }
+  auto get_table_blocks() const -> usize {
+    return n_table_blocks;
+  }
+  auto get_bitmap_blocks() const -> usize {
+    return n_bitmap_blocks;
+  }
 
   // helper functions
 

@@ -62,6 +62,37 @@ public:
   /**
    * {Append anything if you need}
    */
+  block_id_t log_block_id;
+  block_id_t bitmap_block_id;
 };
 
+class Log_info{
+
+public:
+
+    txn_id_t txn_id ;
+    bool finished ;
+    u32 npairs;
+
+    [[maybe_unused]] std::pair<block_id_t,block_id_t> block_id_map[0];
+
+public:
+
+    Log_info(txn_id_t id = 0, bool finish = false)
+    :txn_id(id), finished(finish) {
+        npairs = (DiskBlockSize - sizeof(Log_info)) / (sizeof (block_id_t) * 2);
+    }
+
+    auto flush_to_buffer(u8 *buffer) const {
+
+        memcpy(buffer, this, sizeof(Log_info));
+        auto log_info_p = reinterpret_cast<Log_info *>(buffer);
+
+        for(usize i = 0; i < kMaxLogSize; i++){
+            std::get<0>(log_info_p->block_id_map[i]) = 0;
+            std::get<1>(log_info_p->block_id_map[i]) = 0;
+        }
+
+    }
+};
 } // namespace chfs
