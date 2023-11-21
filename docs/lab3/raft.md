@@ -26,6 +26,38 @@ There are 4 parts in this lab.
 
 Each part relies on the implementation of the prior one. So you must implement these parts one by one.
 
+## Preparation
+
+### Get the source code
+
+- Pull the source code of lab3 from our GitLab:
+
+```bash
+cd chfs && git pull
+```
+
+- Change it to the lab3 branch
+
+```bash
+git checkout -b lab3 origin/lab3
+```
+
+- Merge with the code of lab2 and resolve any conflicts on your own if there are any.
+
+```bash
+git merge lab2
+```
+
+- Update submodules if needed:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Compile Code And Test
+
+Please also refer to [lab1.md](../lab1/lab1.md) for more details. It's the same with lab1.
+
 ## Overview of the code
 
 You will mainly modify and complete the codes in `src/include/rsm/raft/node.h`, `src/include/rsm/raft/log.h`, `src/include/rsm/raft/protocol.h`.
