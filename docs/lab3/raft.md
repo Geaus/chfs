@@ -307,11 +307,12 @@ In this part, you will persist the states of a Raft node. Check Figure 2 in the 
 
 Recommended steps:
 
-1. You should implement the class `RaftLog` in `log.h` to persist the necessary states (e.g. logs). The test case will use the constructor `RaftLog(std::shared_ptr<BlockManager> bm)` to create a `RaftLog` object. Each raft node will have its own logs to persist the states. And after a failure, the node will restore its storage via this dir.
-2. To ease the difficulty of your implementation, you can assume that total size of raft log is always smaller than 64K and size of a single log entry is always smaller than 4K.
-3. You must not use C/C++ file operations to persist your log.
-4. You should use the `RaftNode::log_storage` to persist the state, whenever they are changed.
-5. And you should use the storage to restore the state when a Raft node is created.
+1. You should implement the class `RaftLog` in `log.h` to persist the necessary states (e.g. logs) and use the constructor `RaftLog(std::shared_ptr<BlockManager> bm)` to create a `RaftLog` object in `RaftNode`. Each raft node will have its own logs to persist the states. And after a failure, the node will restore its storage via this dir.
+2. Before every test, we will create an empty directory `/tmp/raft_log`, you can store logs there for convenience. (You can store logs anywhere you want as long as it works)
+3. To ease the difficulty of your implementation, you can assume that total size of raft log is always smaller than 64K and size of a single log entry is always smaller than 4K.
+4. You must not use C/C++ file operations to persist your log.
+5. You should use the `RaftNode::log_storage` to persist the state, whenever they are changed.
+6. And you should use the storage to restore the state when a Raft node is created.
 
 You should pass the 6 test cases of RaftTestPart3:
 * `RaftTestPart3.BasicPersist` (5)
