@@ -115,6 +115,12 @@ private:
     void run_background_commit();
     void run_background_apply();
 
+    /* help function */
+    long long get_timestamp();
+    void get_random_timeout();
+    void convert_to_follower(int term);
+    void start_new_election();
+    void send_heartbeat();
 
     /* Data structures */
     bool network_stat;          /* for test */
@@ -140,6 +146,26 @@ private:
     std::unique_ptr<std::thread> background_ping;
     std::unique_ptr<std::thread> background_commit;
     std::unique_ptr<std::thread> background_apply;
+
+    bool init = true;
+    int votedFor;
+    std::vector<log_entry<Command>> log;
+
+    int commitIndex;
+    int lastApplied;
+
+    std::vector<int> nextIndex;
+    std::vector<int> matchIndex;
+    std::vector<int> match_count;
+
+    std::vector< bool > vote_result;
+
+    long long election_timer;
+
+    int follower_election_timeout;
+    int candidate_election_timeout;
+
+    std::vector<u8> snapshot;
 
     /* Lab3: Your code here */
 };
@@ -172,10 +198,29 @@ RaftNode<StateMachine, Command>::RaftNode(int node_id, std::vector<RaftNodeConfi
     rpc_server->bind(RAFT_RPC_APPEND_ENTRY, [this](RpcAppendEntriesArgs arg) { return this->append_entries(arg); });
     rpc_server->bind(RAFT_RPC_INSTALL_SNAPSHOT, [this](InstallSnapshotArgs arg) { return this->install_snapshot(arg); });
 
-   /* Lab3: Your code here */ 
+    /* Lab3: Your code here */
 
 
-    rpc_server->run(true, configs.size()); 
+    thread_pool = std::make_unique<ThreadPool>(32);
+    state = std::make_unique<StateMachine>();
+
+    std::shared_ptr<BlockManager> bm = std::make_shared<BlockManager>("/tmp/raft_log/node_"+std::to_string(my_id));
+    log_storage = std::make_unique<RaftLog<Command>>(bm);
+    log_storage->restore(current_term,votedFor,log);
+
+
+//    votedFor = -1;
+//    log_entry<Command> first_empty_log = log_entry<Command>();
+//    log.push_back(first_empty_log);
+
+    commitIndex = 0;
+    lastApplied = 0;
+    vote_result.assign(node_configs.size(), false);
+
+    election_timer = get_timestamp();
+    get_random_timeout();
+
+    rpc_server->run(true, configs.size());
 }
 
 template <typename StateMachine, typename Command>
@@ -200,7 +245,31 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::start() -> int
 {
     /* Lab3: Your code here */
+    //Part1
+    RAFT_LOG("start");
+    std::map<int, bool> node_network_available;
+    for (auto config: node_configs) {
+        node_network_available.insert(std::make_pair(config.node_id, true));
+    }
+    set_network(node_network_available);
 
+    if(init){
+        while(true) {
+            bool flag = true;
+            for (const auto &client: rpc_clients_map) {
+                if(client.second != nullptr && client.second->get_connection_state() != rpc::client::connection_state::connected){
+                    flag = false;
+                }
+            }
+            if(flag){
+                break;
+            }
+        }
+        init = false;
+    }
+
+
+    stopped.store(false);
     background_election = std::make_unique<std::thread>(&RaftNode::run_background_election, this);
     background_ping = std::make_unique<std::thread>(&RaftNode::run_background_ping, this);
     background_commit = std::make_unique<std::thread>(&RaftNode::run_background_commit, this);
@@ -213,6 +282,18 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::stop() -> int
 {
     /* Lab3: Your code here */
+    //Part1
+    RAFT_LOG("stop");
+//    for(const auto &entry : log){
+//       std::cerr<<entry.index<<std::endl;
+//    }
+
+    stopped.store(true);
+    background_election->join();
+    background_ping->join();
+    background_commit->join();
+    background_apply->join();
+
     return 0;
 }
 
@@ -220,7 +301,11 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::is_leader() -> std::tuple<bool, int>
 {
     /* Lab3: Your code here */
-    return std::make_tuple(false, -1);
+    //Part1
+    bool is_leader = role == RaftRole::Leader;
+    return std::make_tuple(is_leader, current_term);
+
+//    return std::make_tuple(false, -1);
 }
 
 template <typename StateMachine, typename Command>
@@ -233,13 +318,45 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::new_command(std::vector<u8> cmd_data, int cmd_size) -> std::tuple<bool, int, int>
 {
     /* Lab3: Your code here */
-    return std::make_tuple(false, -1, -1);
+    std::unique_lock<std::mutex> lock(mtx);
+
+    bool flag = false;
+    int term = -1;
+    int index = -1;
+
+    if(std::get<0>(is_leader())) {
+        Command cmd;
+        cmd.deserialize(cmd_data,cmd_size);
+
+        index = log.size();
+        log_entry<Command> new_log(index,current_term,cmd);
+        RAFT_LOG("leader %d add log %d",my_id,cmd.value);
+        log.push_back(new_log);
+
+        nextIndex[my_id] = index + 1;
+        matchIndex[my_id] = index;
+        match_count.push_back(1);
+
+        flag = true;
+        term = current_term;
+
+//        log_storage->persist_log(log);
+         log_storage->append_log(new_log);
+    }
+
+
+    return std::make_tuple(flag, term, index);
+//    return std::make_tuple(false, -1, -1);
 }
 
 template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::save_snapshot() -> bool
 {
-    /* Lab3: Your code here */ 
+    /* Lab3: Your code here */
+    std::unique_lock<std::mutex> lock(mtx);
+
+    snapshot = state->snapshot();
+    log_storage->persist_log(log);
     return true;
 }
 
@@ -247,6 +364,7 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::get_snapshot() -> std::vector<u8>
 {
     /* Lab3: Your code here */
+    std::unique_lock<std::mutex> lock(mtx);
     return std::vector<u8>();
 }
 
@@ -261,13 +379,65 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::request_vote(RequestVoteArgs args) -> RequestVoteReply
 {
     /* Lab3: Your code here */
-    return RequestVoteReply();
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx);
+    election_timer = get_timestamp();
+
+    RequestVoteReply reply;
+    reply.term = current_term;
+    reply.voteGranted = false;
+
+    if (args.term < current_term) {
+        return reply;
+    }
+    if(args.term > current_term) {
+        convert_to_follower(args.term);
+    }
+    if(votedFor == -1 || votedFor == args.candidateId) {
+        if(args.lastLogTerm > log.back().term ||
+        (args.lastLogTerm == log.back().term && args.lastLogIndex >= log.back().index)) {
+
+            votedFor = args.candidateId;
+            reply.voteGranted = true;
+
+            log_storage->persist_meta(current_term,votedFor);
+        }
+    }
+    return reply;
+
+
+//    return RequestVoteReply();
 }
 
 template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::handle_request_vote_reply(int target, const RequestVoteArgs arg, const RequestVoteReply reply)
 {
     /* Lab3: Your code here */
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx);
+    election_timer = get_timestamp();
+
+    if(reply.term > current_term) {
+        convert_to_follower(reply.term);
+    }
+    if(role == RaftRole::Candidate) {
+
+        vote_result[target] = reply.voteGranted;
+//        RAFT_LOG("node %d get vote from node %d, result : %d", arg.candidateId, target, reply.voteGranted);
+        int node_num = rpc_clients_map.size();
+        int votes = std::accumulate(vote_result.begin(),vote_result.end(),0);
+
+        if(votes > node_num / 2){
+            role = RaftRole::Leader;
+            RAFT_LOG("node %d become leader",my_id)
+            nextIndex.assign(node_num,log.back().index + 1);
+            matchIndex.assign(node_num,0);
+            matchIndex[my_id] = log.back().index;
+            match_count.assign(log.back().index - commitIndex, 0);
+
+            send_heartbeat();
+        }
+    }
     return;
 }
 
@@ -275,6 +445,58 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::append_entries(RpcAppendEntriesArgs rpc_arg) -> AppendEntriesReply
 {
     /* Lab3: Your code here */
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx);
+    election_timer = get_timestamp();
+
+    AppendEntriesReply reply;
+    reply.term = current_term;
+    reply.success = false;
+
+    AppendEntriesArgs<Command> args = transform_rpc_append_entries_args<Command>(rpc_arg);
+
+
+    if(args.term < current_term) {
+        return reply;
+    }
+    if(args.term > current_term || role == RaftRole::Candidate) {
+        convert_to_follower(args.term);
+    }
+
+    if(!(args.prevLogIndex <= log.back().index && args.prevLogTerm == log[args.prevLogIndex].term)) {
+        return reply;
+    }
+    else {
+        if (args.entries.empty()) {
+            reply.success = true;
+        }
+        else{
+            if (args.prevLogIndex < log.back().index) {
+
+                int end_index = args.prevLogIndex + 1;
+                if (end_index <= log.back().index) {
+                    log.erase(log.begin() + end_index, log.end());
+                }
+                log.insert(log.end(), args.entries.begin(), args.entries.end());
+                log_storage->persist_log(log);
+//                RAFT_LOG("node %d receive log %d",my_id,args.entries[0].cmd.value)
+            }
+            else {
+
+                log.insert(log.end(), args.entries.begin(), args.entries.end());
+                log_storage->append_logs(args.entries);
+//                log_storage->persist_log(log);
+//                RAFT_LOG("node %d receive log %d",my_id,args.entries[0].cmd.value)
+            }
+            reply.success = true;
+        }
+        if (args.leaderCommit > commitIndex) {
+            commitIndex = std::min(args.leaderCommit, log.back().index);
+        }
+    }
+
+    return reply;
+
     return AppendEntriesReply();
 }
 
@@ -282,6 +504,37 @@ template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::handle_append_entries_reply(int node_id, const AppendEntriesArgs<Command> arg, const AppendEntriesReply reply)
 {
     /* Lab3: Your code here */
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx);
+    election_timer = get_timestamp();
+
+    if(reply.term > current_term) {
+        convert_to_follower(reply.term);
+        return;
+    }
+    if(!std::get<0>(is_leader())) {
+        return;
+    }
+    if(reply.success) {
+        int prev_match_index = matchIndex[node_id];
+        matchIndex[node_id] = std::max(matchIndex[node_id], (int)(arg.prevLogIndex + arg.entries.size()));
+        nextIndex[node_id] = matchIndex[node_id] + 1;
+
+        // check commit
+        int end_count_index = std::max(prev_match_index - commitIndex, 0) - 1;
+        int node_num = rpc_clients_map.size();
+        for (int i = matchIndex[node_id] - commitIndex - 1; i > end_count_index; --i) {
+            match_count[i]++;
+            if (match_count[i] > node_num / 2 && log[commitIndex + i + 1].term == current_term) {
+                commitIndex += i + 1;
+                match_count.erase(match_count.begin(), match_count.begin() + i + 1);
+                break;
+            }
+        }
+    }
+    else {
+        nextIndex[node_id] = std::min(nextIndex[node_id], arg.prevLogIndex);
+    }
     return;
 }
 
@@ -290,6 +543,32 @@ template <typename StateMachine, typename Command>
 auto RaftNode<StateMachine, Command>::install_snapshot(InstallSnapshotArgs args) -> InstallSnapshotReply
 {
     /* Lab3: Your code here */
+    std::unique_lock<std::mutex> lock(mtx);
+    election_timer = get_timestamp();
+
+    InstallSnapshotReply reply;
+    reply.term = current_term;
+
+    if (args.term < current_term) {
+        return reply;
+    }
+    if (args.term > current_term || role == RaftRole::Candidate) {
+        convert_to_follower(args.term);
+    }
+    if (args.lastIncludedIndex <= log.back().index && args.lastIncludedTerm == log[args.lastIncludedIndex].term) {
+
+    }
+    else {
+
+    }
+    snapshot = args.data;
+    state->apply_snapshot(snapshot);
+
+    lastApplied = args.lastIncludedIndex;
+    commitIndex = std::max(commitIndex,args.lastIncludedIndex);
+
+    log_storage->persist_log(log);
+
     return InstallSnapshotReply();
 }
 
@@ -298,6 +577,18 @@ template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::handle_install_snapshot_reply(int node_id, const InstallSnapshotArgs arg, const InstallSnapshotReply reply)
 {
     /* Lab3: Your code here */
+    std::unique_lock<std::mutex> lock(mtx);
+
+    if (reply.term > current_term) {
+        convert_to_follower(reply.term);
+        return;
+    }
+    if (std::get<0>(is_leader())) {
+        return;
+    }
+
+    matchIndex[node_id] = std::max(matchIndex[node_id], arg.lastIncludedIndex);
+    nextIndex[node_id] = matchIndex[node_id] + 1;
     return;
 }
 
@@ -366,36 +657,80 @@ void RaftNode<StateMachine, Command>::send_install_snapshot(int target_id, Insta
 template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::run_background_election() {
     // Periodly check the liveness of the leader.
-
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx, std::defer_lock);
     // Work for followers and candidates.
 
     /* Uncomment following code when you finish */
-    // while (true) {
-    //     {
-    //         if (is_stopped()) {
-    //             return;
-    //         }
-    //         /* Lab3: Your code here */
-    //     }
-    // }
-    return;
+
+     while (true){
+         if (is_stopped()) {
+             return;
+         }
+         /* Lab3: Your code here */
+
+         lock.lock();
+         long long current_time = get_timestamp();
+         switch (role) {
+             case RaftRole::Follower:{
+                 if(current_time - election_timer > follower_election_timeout) {
+                       start_new_election();
+//                       RAFT_LOG("node %d become candidate",my_id)
+                 }
+                 break;
+             }
+             case RaftRole::Candidate:{
+                 if(current_time - election_timer > candidate_election_timeout){
+                      start_new_election();
+                 }
+                 break;
+              }
+             default:
+                 break;
+
+         }
+         lock.unlock();
+
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+     }
+return;
 }
 
 template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::run_background_commit() {
     // Periodly send logs to the follower.
-
+    std::unique_lock<std::mutex> lock(mtx, std::defer_lock);
     // Only work for the leader.
 
     /* Uncomment following code when you finish */
-    // while (true) {
-    //     {
-    //         if (is_stopped()) {
-    //             return;
-    //         }
-    //         /* Lab3: Your code here */
-    //     }
-    // }
+     while (true) {
+
+         if (is_stopped()) {
+             return;
+         }
+         /* Lab3: Your code here */
+
+         lock.lock();
+         if (std::get<0>(is_leader())) {
+
+             for(const auto &client : rpc_clients_map) {
+                 if(client.first == my_id || client.second == nullptr) {
+                     continue;
+                 }
+                 if(log.back().index >= nextIndex[client.first]) {
+                     std::vector<log_entry<Command>> ret;
+                     ret.assign(log.begin()+nextIndex[client.first],log.begin()+log.back().index + 1);
+
+                     AppendEntriesArgs<Command> args(current_term,my_id,nextIndex[client.first] - 1,
+                                                     log[nextIndex[client.first] - 1].term,ret,commitIndex);
+                     thread_pool->enqueue(&RaftNode::send_append_entries,this,client.first,args);
+                 }
+             }
+         }
+         lock.unlock();
+
+         std::this_thread::sleep_for(std::chrono::milliseconds(50));
+     }
 
     return;
 }
@@ -403,18 +738,29 @@ void RaftNode<StateMachine, Command>::run_background_commit() {
 template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::run_background_apply() {
     // Periodly apply committed logs the state machine
-
+    std::unique_lock<std::mutex> lock(mtx, std::defer_lock);
     // Work for all the nodes.
 
     /* Uncomment following code when you finish */
-    // while (true) {
-    //     {
-    //         if (is_stopped()) {
-    //             return;
-    //         }
-    //         /* Lab3: Your code here */
-    //     }
-    // }
+     while (true) {
+
+         if (is_stopped()) {
+             return;
+         }
+         /* Lab3: Your code here */
+         lock.lock();
+         if (commitIndex > lastApplied) {
+
+             for (int i = lastApplied + 1; i <= commitIndex; i++) {
+                 state->apply_log(log[i].cmd);
+//                 RAFT_LOG("node %d apply %d",my_id, log[i].cmd.value)
+             }
+             lastApplied = commitIndex;
+         }
+         lock.unlock();
+
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+     }
 
     return;
 }
@@ -422,18 +768,26 @@ void RaftNode<StateMachine, Command>::run_background_apply() {
 template <typename StateMachine, typename Command>
 void RaftNode<StateMachine, Command>::run_background_ping() {
     // Periodly send empty append_entries RPC to the followers.
-
+    //Part1
+    std::unique_lock<std::mutex> lock(mtx, std::defer_lock);
     // Only work for the leader.
 
     /* Uncomment following code when you finish */
-    // while (true) {
-    //     {
-    //         if (is_stopped()) {
-    //             return;
-    //         }
-    //         /* Lab3: Your code here */
-    //     }
-    // }
+     while (true) {
+
+         if (is_stopped()) {
+             return;
+         }
+         /* Lab3: Your code here */
+         lock.lock();
+         if(std::get<0>(is_leader())) {
+             send_heartbeat();
+         }
+         lock.unlock();
+
+         std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+     }
 
     return;
 }
@@ -524,6 +878,81 @@ std::vector<u8> RaftNode<StateMachine, Command>::get_snapshot_direct()
     std::unique_lock<std::mutex> lock(mtx);
 
     return state->snapshot(); 
+}
+
+/*********************************************************************
+ *
+ * @tparam StateMachine
+ * @tparam Command
+ * help function
+***********************************************************************/
+template <typename StateMachine, typename Command>
+long long RaftNode<StateMachine, Command>::get_timestamp() {
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::chrono::nanoseconds d = now.time_since_epoch();
+    std::chrono::milliseconds mill = std::chrono::duration_cast<std::chrono::milliseconds>(d);
+    return mill.count();
+}
+
+template <typename StateMachine, typename Command>
+void RaftNode<StateMachine, Command>::get_random_timeout() {
+    static std::random_device rd;
+    static std::minstd_rand gen(rd());
+    // static std::mt19937 gen(rd()); // Optional strategy
+    static std::uniform_int_distribution<int> follower(300, 500); // Adjust param
+    static std::uniform_int_distribution<int> candidate(800, 1000); // Adjust param
+
+    follower_election_timeout = follower(gen);
+    candidate_election_timeout = candidate(gen);
+}
+
+template <typename StateMachine, typename Command>
+void  RaftNode<StateMachine, Command>::convert_to_follower(int term) {
+
+    role = RaftRole::Follower;
+    current_term = term;
+    votedFor = -1;
+    log_storage->persist_meta(current_term,votedFor);
+
+    get_random_timeout();
+}
+
+template <typename StateMachine, typename Command>
+void RaftNode<StateMachine, Command>::start_new_election() {
+
+    role = RaftRole::Candidate;
+    current_term++;
+    votedFor = my_id;
+    vote_result.assign(rpc_clients_map.size(), false);
+    vote_result[my_id] = true;
+
+    log_storage->persist_meta(current_term,votedFor);
+    get_random_timeout();
+
+    RequestVoteArgs args(current_term, my_id, log.back().index, log.back().term);
+
+    for(const auto &client : rpc_clients_map) {
+        if(client.first == my_id || client.second == nullptr) {
+            continue;
+        }
+        thread_pool->enqueue(&RaftNode::send_request_vote,this,client.first,args);
+    }
+    election_timer = get_timestamp();
+}
+
+template <typename StateMachine, typename Command>
+void RaftNode<StateMachine, Command>::send_heartbeat() {
+
+    for(const auto &client : rpc_clients_map) {
+        if(client.first == my_id || client.second == nullptr) {
+            continue;
+        }
+        AppendEntriesArgs<Command> args(current_term,my_id,nextIndex[client.first] - 1,
+                                        log[nextIndex[client.first] - 1].term,std::vector<log_entry<Command>>(),commitIndex);
+
+        thread_pool->enqueue(&RaftNode::send_append_entries,this,client.first,args);
+    }
+
 }
 
 }
