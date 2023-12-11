@@ -182,6 +182,11 @@ set(LAB2B_FILES
         ${LAB2A_FILES}
 )
 
+set(LAB4_FILES
+        "${PROJECT_SOURCE_DIR}/src/include/map_reduce/*.h"
+        "${PROJECT_SOURCE_DIR}/src/map_reduce/*.cc"
+)
+
 add_custom_target(check-clang-tidy-lab2b
         ${CHFS_BUILD_SUPPORT_DIR}/run_clang_tidy.py # run LLVM's clang-tidy script
         -clang-tidy-binary ${CLANG_TIDY_BIN} # using our clang-tidy binary
