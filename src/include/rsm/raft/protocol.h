@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "rsm/raft/log.h"
 #include "rpc/msgpack.hpp"
 
@@ -164,6 +166,8 @@ struct InstallSnapshotArgs {
         data
     )
     InstallSnapshotArgs(){}
+    InstallSnapshotArgs(int term,int leaderId,int lastIncludedIndex,int lastIncludedTerm,std::vector<u8> data)
+    :term(term),leaderId(leaderId),lastIncludedIndex(lastIncludedIndex),lastIncludedTerm(lastIncludedTerm),data(std::move(data)){}
 };
 
 struct InstallSnapshotReply {
@@ -174,6 +178,7 @@ struct InstallSnapshotReply {
         term
     )
     InstallSnapshotReply(){}
+    explicit InstallSnapshotReply(int term):term(term){}
 };
 
 } /* namespace chfs */
