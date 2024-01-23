@@ -21,6 +21,48 @@ namespace mapReduce {
         MAP,
         REDUCE
     };
+    struct mr_task_status {
+        int taskType;
+        int index;
+        bool is_assigned;
+        bool is_completed;
+
+        mr_task_status(){}
+        mr_task_status(int taskType,int index,bool is_assigned,bool is_completed):
+        taskType(taskType),index(index),is_assigned(is_assigned),is_completed(is_completed){}
+    };
+
+    struct AskTaskReply {
+
+        int taskType;
+        int index;
+        std::string filename;
+        int mapper_num;
+        int reducer_num;
+
+        MSGPACK_DEFINE(
+            taskType,
+            index,
+            filename,
+            mapper_num,
+            reducer_num
+        )
+        AskTaskReply(){}
+        AskTaskReply(int taskType, int index, std::string filename, int mapper_num, int reducer_num):
+                taskType(taskType), index(index), filename(std::move(filename)), mapper_num(mapper_num), reducer_num(reducer_num){}
+    };
+
+    inline bool isCharacter(char ch) {
+        return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z');
+    }
+
+    inline int hash(const std::string &str) {
+        unsigned int tmp = 0;
+        for (const auto &c : str) {
+            tmp = tmp * 127 + (int) c;
+        }
+        return (int)(tmp % 4);
+    }
 
     std::vector<KeyVal> Map(const std::string &content);
 
@@ -54,15 +96,25 @@ namespace mapReduce {
     class Coordinator {
     public:
         Coordinator(MR_CoordinatorConfig config, const std::vector<std::string> &files, int nReduce);
-        std::tuple<int, int> askTask(int);
+        auto askTask(int)->AskTaskReply;
         int submitTask(int taskType, int index);
         bool Done();
+        mr_task_status assignTask();
+        std::string get_file_name(int index);
+        void checkFinish();
 
     private:
         std::vector<std::string> files;
         std::mutex mtx;
         bool isFinished;
         std::unique_ptr<chfs::RpcServer> rpc_server;
+
+        int mapper_num;
+        int reducer_num;
+        std::vector <mr_task_status> map_task;
+        std::vector <mr_task_status> reduce_task;
+        long completed_map;
+        long completed_reduce;
     };
 
     class Worker {
@@ -81,5 +133,8 @@ namespace mapReduce {
         std::shared_ptr<chfs::ChfsClient> chfs_client;
         std::unique_ptr<std::thread> work_thread;
         bool shouldStop = false;
+
+        int mapper_num = 0;
+        int reducer_num = 0;
     };
 }
